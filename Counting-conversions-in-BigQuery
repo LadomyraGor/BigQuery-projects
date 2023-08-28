@@ -1,0 +1,60 @@
+-- Counting conversions from session_start to purchase regarding certain dates and traffic channels. This query includes examples of common table expressions (CTE), a CAST function,
+and a JOIN function.
+
+WITH events AS(                                                                                         -- CTE to distinguish session_id
+  SELECT
+    DATE(TIMESTAMP_MICROS(event_timestamp)) AS event_timestamp
+    , event_name
+    , user_pseudo_id
+    , (SELECT value.int_value FROM e.event_params WHERE KEY = 'ga_session_id') AS ga_session_id
+  FROM
+  bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131 e
+),
+
+start AS(
+  SELECT user_pseudo_id, ga_session_id
+  FROM events
+  WHERE event_name = 'session_start'                                                                   -- website session start
+),
+
+cart AS(
+  SELECT user_pseudo_id, ga_session_id
+  FROM events
+  WHERE event_name = 'add_to_cart'                                                                     -- adding product to cart
+),
+
+checkout AS(
+  SELECT user_pseudo_id, ga_session_id
+  FROM events
+  WHERE event_name = 'begin_checkout'                                                                 -- beginning of placing an order
+),
+
+purchase AS(
+  SELECT user_pseudo_id, ga_session_id
+  FROM events
+  WHERE event_name = 'purchase'                                                                       -- purchase
+)
+
+SELECT
+  event_date
+  , traffic_source.source AS SOURCE
+  , traffic_source.medium AS medium
+  , traffic_source.name AS campaign
+  , COUNT (DISTINCT s.user_pseudo_id || '/' || CAST (s.ga_session_id as string)) AS start_user_sessions_count                         -- website session start
+  , COUNT (DISTINCT c.user_pseudo_id || '/' || CAST (c.ga_session_id as string)) AS cart_user_sessions_count                          -- adding product to cart
+  , COUNT (DISTINCT ch.user_pseudo_id || '/' || CAST (ch.ga_session_id as string)) AS checkout_user_sessions_count                    -- beginning of placing an order
+  , COUNT (DISTINCT p.user_pseudo_id || '/' || CAST (p.ga_session_id as string)) AS purchase_user_sessions_count                      -- purchase
+
+  , (COUNT (DISTINCT c.user_pseudo_id || '/' || CAST (c.ga_session_id as string)) / COUNT (DISTINCT s.user_pseudo_id || '/' || CAST (s.ga_session_id as string))) AS visit_to_cart
+  , (COUNT (DISTINCT ch.user_pseudo_id || '/' || CAST (ch.ga_session_id as string)) / COUNT (DISTINCT s.user_pseudo_id || '/' || CAST (s.ga_session_id as string))) AS visit_to_checkout
+  ,(COUNT (DISTINCT p.user_pseudo_id || '/' || CAST (p.ga_session_id as string)) / COUNT (DISTINCT s.user_pseudo_id || '/' || CAST (s.ga_session_id as string))) AS Visit_to_purchase
+
+FROM
+  bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131 e
+
+LEFT JOIN start s USING (user_pseudo_id)
+LEFT JOIN cart c USING (user_pseudo_id)
+LEFT JOIN checkout ch USING (user_pseudo_id)
+LEFT JOIN purchase p USING (user_pseudo_id)
+
+GROUP BY 1, 2, 3, 4;
