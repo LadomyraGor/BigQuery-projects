@@ -1,0 +1,24 @@
+-- Prep of data with a simple SQL query in BigQuery. There are 2 conditions: the data should apply only to the year 2021 and certain events (session_start, view_item, add_to_cart,
+begin_checkout, add_shipping_info, add_payment_info, and purchase).
+
+SELECT
+  DATE(TIMESTAMP_MICROS(event_timestamp)) AS event_timestamp
+  , user_pseudo_id
+  , (SELECT value.int_value FROM e.event_params WHERE KEY = 'ga_session_id') AS session_id
+  , event_name
+  , geo.country
+  , device.category AS device
+  , traffic_source.source AS SOURCE
+  , traffic_source.medium AS medium
+  , traffic_source.name AS campaign
+FROM
+  bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131 e
+WHERE
+  event_name = 'session_start'
+  OR event_name = 'view_item'
+  OR event_name = 'add_to_cart'
+  OR event_name = 'begin_checkout'
+  OR event_name = 'add_shipping_info'
+  OR event_name = 'add_payment_info'
+  OR event_name = 'purchase'
+  AND event_timestamp BETWEEN 2021-01-01 AND 2021-12-31;
